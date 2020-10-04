@@ -1,0 +1,26 @@
+{
+    "name": "rene-roscher/number26",
+    "description": "Simple Laravel Wrapper for the N26 Banking oAuth API",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Rene Roscher",
+            "email": "r.roscher@r-services.eu"
+        }
+    ],
+    "require": {
+        "php": ">=5.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "RServices\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "RServices\\Laravel\\Number26ServiceProvider"
+            ]
+        }
+    }
+}
