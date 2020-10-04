@@ -42,7 +42,7 @@ class Number26
                 'password' => $password
             ], true, 'POST', true);
 
-            if (isset($apiResult['error']) && $apiResult['error'] == "mfa_required") {
+            if (key_exists('error', $apiResult) && $apiResult['error'] == "mfa_required") {
                 $this->requestMfaApproval($apiResult['mfaToken']);
 
                 $apiResult = $this->completeAuthenticationFlow($apiResult['mfaToken']);
@@ -50,7 +50,7 @@ class Number26
                 throw_if(!$apiResult, new Exception("2FA request expired."));
             }
 
-            throw_if(isset($apiResult['error']), new Exception("{$apiResult['error']}: {$apiResult['detail']}"));
+            throw_if(key_exists('error', $apiResult), new Exception("{$apiResult['error']}: {$apiResult['detail']}"));
 
             $this->setProperties($apiResult);
         } else $this->loadProperties();
@@ -82,7 +82,7 @@ class Number26
                 'grant_type' => 'mfa_oob',
                 'mfaToken' => $mfaToken
             ], $basic = true, 'POST');
-            if (isset($apiResult['access_token'])) return $apiResult;
+            if (key_exists('access_token', $apiResult)) return $apiResult;
 
             sleep($wait);
         }
@@ -95,7 +95,7 @@ class Number26
             'refresh_token' => $this->refreshToken
         ], true, 'POST', true);
 
-        if (isset($apiResult['error']) || isset($apiResult['error_description']))
+        if (key_exists('error', $apiResult) || key_exists('error_description', $apiResult))
             throw new Exception($apiResult['error'] . ': ' . $apiResult['error_description']);
 
         $this->setProperties($apiResult);
@@ -140,7 +140,7 @@ class Number26
             new \LogicException('N26: Too many log-in attempts. Please try again in 30 minutes.'));
         $this->apiResponse = $response->json();
         $this->apiHeader = $response->headers();
-        if (isset($this->apiResponse['error']) && $this->apiResponse['error'] == 'invalid_token')
+        if (key_exists('error', $this->apiResponse) && $this->apiResponse['error'] == 'invalid_token')
             $this->refreshSession($apiResource, $params, $basic, $method, $json);
     }
 
