@@ -7,6 +7,7 @@
 namespace RServices;
 
 use \Exception;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Ramsey\Uuid\Uuid;
 
@@ -42,7 +43,7 @@ class Number26
                 'password' => $password
             ], true, 'POST', true);
 
-            if (key_exists('error', $apiResult) && $apiResult['error'] == "mfa_required") {
+            if (Arr::exists($apiResult, 'error') && $apiResult['error'] == "mfa_required") {
                 $this->requestMfaApproval($apiResult['mfaToken']);
 
                 $apiResult = $this->completeAuthenticationFlow($apiResult['mfaToken']);
@@ -50,8 +51,8 @@ class Number26
                 throw_if(!$apiResult, new Exception("2FA request expired."));
             }
 
-            throw_if(key_exists('error', $apiResult), new Exception("{$apiResult['error']}: {$apiResult['detail']}"));
-
+            if (Arr::exists($apiResult, 'error'))
+                throw new Exception("{$apiResult['error']}: {$apiResult['detail']}");
             $this->setProperties($apiResult);
         } else $this->loadProperties();
 
@@ -61,7 +62,7 @@ class Number26
     {
         if (!$this->deviceToken)
             if (!\Cache::has('device_token'))
-                \Cache::put('device_token', $this->deviceToken = Uuid::uuid4());
+                \Cache::forever('device_token', $this->deviceToken = Uuid::uuid4());
             else
                 $this->deviceToken = \Cache::get('device_token');
     }
@@ -82,7 +83,8 @@ class Number26
                 'grant_type' => 'mfa_oob',
                 'mfaToken' => $mfaToken
             ], $basic = true, 'POST');
-            if (key_exists('access_token', $apiResult)) return $apiResult;
+            if (Arr::exists($apiResult, 'access_token'))
+                return $apiResult;
 
             sleep($wait);
         }
@@ -95,7 +97,7 @@ class Number26
             'refresh_token' => $this->refreshToken
         ], true, 'POST', true);
 
-        if (key_exists('error', $apiResult) || key_exists('error_description', $apiResult))
+        if (Arr::exists($apiResult, 'error') || Arr::exists($apiResult, 'error_description'))
             throw new Exception($apiResult['error'] . ': ' . $apiResult['error_description']);
 
         $this->setProperties($apiResult);
@@ -140,7 +142,7 @@ class Number26
             new \LogicException('N26: Too many log-in attempts. Please try again in 30 minutes.'));
         $this->apiResponse = $response->json();
         $this->apiHeader = $response->headers();
-        if (key_exists('error', $this->apiResponse) && $this->apiResponse['error'] == 'invalid_token')
+        if (Arr::exists($this->apiResponse, 'error') && $this->apiResponse['error'] == 'invalid_token')
             $this->refreshSession($apiResource, $params, $basic, $method, $json);
     }
 
