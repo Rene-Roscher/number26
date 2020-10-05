@@ -118,11 +118,12 @@ class Number26
 
     protected function setProperties($apiResult)
     {
-        file_put_contents($this->storeAccessTokensFile, json_encode([
-            'expire' => $this->expiresTime = (time() + $apiResult['expires_in']),
-            'token' => $this->accessToken = $apiResult['access_token'],
-            'refresh' => $this->refreshToken = $apiResult['refresh_token']
-        ]));
+        if (Arr::exists($apiResult, 'expires_in') && Arr::exists($apiResult, 'access_token') && Arr::exists($apiResult, 'refresh_token'))
+            file_put_contents($this->storeAccessTokensFile, json_encode([
+                'expire' => $this->expiresTime = (time() + $apiResult['expires_in']),
+                'token' => $this->accessToken = $apiResult['access_token'],
+                'refresh' => $this->refreshToken = $apiResult['refresh_token']
+            ]));
     }
 
     protected function loadProperties()
