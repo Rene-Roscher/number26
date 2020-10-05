@@ -8,7 +8,6 @@ namespace RServices;
 
 use \Exception;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Collection;
 use Ramsey\Uuid\Uuid;
 
 class Number26
@@ -25,6 +24,9 @@ class Number26
     protected $apiInfo;
     protected $apiError;
 
+    protected $username;
+    protected $password;
+
     protected $store;
     protected $storeAccessTokensFile;
 
@@ -35,27 +37,34 @@ class Number26
         $this->storeAccessTokensFile = storage_path('.n26');
         $this->checkDeviceToken();
         $this->autoCollect = $autoCollect;
+        $this->username = $username;
+        $this->password = $password;
 
-        if (!$this->isValidConnection()) {
-            $apiResult = $this->callApi('/oauth/token', [
-                'grant_type' => 'password',
-                'username' => $username,
-                'password' => $password
-            ], true, 'POST', true);
+        if ($this->isValidConnection())
+            $this->loadProperties();
+        else $this->login();
+    }
 
-            if (Arr::exists($apiResult, 'error') && $apiResult['error'] == "mfa_required") {
-                $this->requestMfaApproval($apiResult['mfaToken']);
+    public function login()
+    {
+        $apiResult = $this->callApi('/oauth/token', [
+            'grant_type' => 'password',
+            'username' => $this->username,
+            'password' => $this->password
+        ], true, 'POST', true);
 
-                $apiResult = $this->completeAuthenticationFlow($apiResult['mfaToken']);
+        if (Arr::exists($apiResult, 'error') && $apiResult['error'] == "mfa_required") {
+            $this->requestMfaApproval($apiResult['mfaToken']);
 
-                throw_if(!$apiResult, new Exception("2FA request expired."));
-            }
+            $apiResult = $this->completeAuthenticationFlow($apiResult['mfaToken']);
 
-            if (Arr::exists($apiResult, 'error'))
-                throw new Exception("{$apiResult['error']}: {$apiResult['detail']}");
-            $this->setProperties($apiResult);
-        } else $this->loadProperties();
+            throw_if(!$apiResult, new Exception("2FA request expired."));
+        }
 
+        if (Arr::exists($apiResult, 'error'))
+            throw new Exception("{$apiResult['error']}: {$apiResult['detail']}");
+
+        $this->setProperties($apiResult);
     }
 
     protected function checkDeviceToken()
@@ -63,8 +72,7 @@ class Number26
         if (!$this->deviceToken)
             if (!\Cache::has('device_token'))
                 \Cache::forever('device_token', $this->deviceToken = Uuid::uuid4());
-            else
-                $this->deviceToken = \Cache::get('device_token');
+            else $this->deviceToken = \Cache::get('device_token');
     }
 
     protected function requestMfaApproval($mfaToken)
@@ -83,8 +91,7 @@ class Number26
                 'grant_type' => 'mfa_oob',
                 'mfaToken' => $mfaToken
             ], $basic = true, 'POST');
-            if (Arr::exists($apiResult, 'access_token'))
-                return $apiResult;
+            if (Arr::exists($apiResult, 'access_token')) return $apiResult;
 
             sleep($wait);
         }
@@ -97,8 +104,12 @@ class Number26
             'refresh_token' => $this->refreshToken
         ], true, 'POST', true);
 
-        if (Arr::exists($apiResult, 'error') || Arr::exists($apiResult, 'error_description'))
-            throw new Exception($apiResult['error'] . ': ' . $apiResult['error_description']);
+        $description = Arr::exists($apiResult, 'error_description');
+        if (Arr::exists($apiResult, 'error') || $description)
+            if ($description && $apiResult['error_description'] == 'Refresh token not found!') {
+                $this->login();
+                if ($apiResource) $this->request($apiResource, $params, $basic, $method, $json);
+            } else throw new Exception($apiResult['error'] . ': ' . $apiResult['error_description']);
 
         $this->setProperties($apiResult);
 
@@ -108,7 +119,7 @@ class Number26
     protected function setProperties($apiResult)
     {
         file_put_contents($this->storeAccessTokensFile, json_encode([
-            'expire' => $this->expiresTime = time() + $apiResult['expires_in'],
+            'expire' => $this->expiresTime = (time() + $apiResult['expires_in']),
             'token' => $this->accessToken = $apiResult['access_token'],
             'refresh' => $this->refreshToken = $apiResult['refresh_token']
         ]));
@@ -164,42 +175,50 @@ class Number26
 
     public function getMe($full = false)
     {
-        return $this->autoCollect ? collect($result = $this->callApi('/api/me' . ($full ? '?full=true' : ''))) : $result;
+        $result = $this->callApi('/api/me' . ($full ? '?full=true' : ''));
+        return $this->autoCollect ? collect($result) : $result;
     }
 
     public function getSpaces()
     {
-        return $this->callApi('/api/spaces');
+        $callApi = $this->callApi('/api/spaces');
+        return $this->autoCollect ? collect($callApi) : $callApi;
     }
 
     public function getCards()
     {
-        return $this->callApi('/api/v2/cards');
+        $callApi = $this->callApi('/api/v2/cards');
+        return $this->autoCollect ? collect($callApi) : $callApi;
     }
 
     public function getCard($id)
     {
-        return $this->callApi('/api/cards/' . $id);
+        $callApi = $this->callApi('/api/cards/' . $id);
+        return $this->autoCollect ? collect($callApi) : $callApi;
     }
 
     public function getAccounts()
     {
-        return $this->callApi('/api/accounts');
+        $callApi = $this->callApi('/api/accounts');
+        return $this->autoCollect ? collect($callApi) : $callApi;
     }
 
     public function getAddresses()
     {
-        return $this->callApi('/api/addresses');
+        $callApi = $this->callApi('/api/addresses');
+        return $this->autoCollect ? collect($callApi) : $callApi;
     }
 
     public function getAddress($id)
     {
-        return $this->callApi('/api/addresses/' . $id);
+        $callApi = $this->callApi('/api/addresses/' . $id);
+        return $this->autoCollect ? collect($callApi) : $callApi;
     }
 
     public function getTransactions($params = [])
     {
-        return $this->getSmrtTransactions($params);
+        $transactions = $this->getSmrtTransactions($params);
+        return $this->autoCollect ? collect($transactions) : $transactions;
     }
 
     public function getSmrtTransactions($params)
@@ -210,7 +229,8 @@ class Number26
 
     public function getTransaction($id)
     {
-        return $this->callApi('/api/transactions/' . $id);
+        $callApi = $this->callApi('/api/transactions/' . $id);
+        return $this->autoCollect ? collect($callApi) : $callApi;
     }
 
     public function getSmrtTransaction($id)
@@ -218,24 +238,22 @@ class Number26
         return $this->callApi('/api/smrt/transactions/' . $id);
     }
 
-    public function getRecipients()
-    {
-        return $this->callApi('/api/transactions/recipients');
-    }
-
     public function getContacts()
     {
-        return $this->callApi('/api/smrt/contacts');
+        $callApi = $this->callApi('/api/smrt/contacts');
+        return $this->autoCollect ? collect($callApi) : $callApi;
     }
 
     public function getCategories()
     {
-        return $this->callApi('/api/smrt/categories');
+        $callApi = $this->callApi('/api/smrt/categories');
+        return $this->autoCollect ? collect($callApi) : $callApi;
     }
 
     public function getFeaturesCountries($country)
     {
-        return $this->callApi("/api/features/countries/$country");
+        $callApi = $this->callApi("/api/features/countries/$country");
+        return $this->autoCollect ? collect($callApi) : $callApi;
     }
 
     public function makeTransfer($amount, $pin, $bic, $iban, $name, $reference)
