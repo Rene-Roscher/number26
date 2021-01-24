@@ -32,9 +32,9 @@ class Number26
 
     protected $autoCollect;
 
-    public function __construct($username, $password, $autoCollect = true)
+    public function __construct($username, $password, $autoCollect = true, $storeAccessTokensFile = '.n26')
     {
-        $this->storeAccessTokensFile = storage_path('.n26');
+        $this->storeAccessTokensFile = storage_path($storeAccessTokensFile);
         $this->checkDeviceToken();
         $this->autoCollect = $autoCollect;
         $this->username = $username;
